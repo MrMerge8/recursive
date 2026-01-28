@@ -663,43 +663,146 @@ class Database:
 
 
 class BinanceClient:
-    BASE_URL = "https://api.binance.com/api/v3"
+    """Crypto data client with fallback support for geo-restricted regions."""
+    
+    # Primary: Binance, Fallback: CryptoCompare (works globally)
+    BINANCE_URL = "https://api.binance.com/api/v3"
+    CRYPTOCOMPARE_URL = "https://min-api.cryptocompare.com/data"
+    
+    def __init__(self):
+        self.use_fallback = False
     
     def get_btc_price(self) -> float:
-        response = requests.get(f"{self.BASE_URL}/ticker/price", params={"symbol": "BTCUSDT"})
+        if not self.use_fallback:
+            try:
+                response = requests.get(f"{self.BINANCE_URL}/ticker/price", params={"symbol": "BTCUSDT"}, timeout=10)
+                response.raise_for_status()
+                return float(response.json()["price"])
+            except Exception as e:
+                print(f"⚠️ Binance failed ({e}), switching to CryptoCompare fallback")
+                self.use_fallback = True
+        
+        # Fallback to CryptoCompare
+        response = requests.get(f"{self.CRYPTOCOMPARE_URL}/price", params={
+            "fsym": "BTC",
+            "tsyms": "USDT"
+        }, timeout=10)
         response.raise_for_status()
-        return float(response.json()["price"])
+        return float(response.json()["USDT"])
     
     def get_recent_klines(self, interval: str = "5m", limit: int = 288) -> List[dict]:
-        response = requests.get(f"{self.BASE_URL}/klines", params={
-            "symbol": "BTCUSDT",
-            "interval": interval,
-            "limit": limit
-        })
+        if not self.use_fallback:
+            try:
+                response = requests.get(f"{self.BINANCE_URL}/klines", params={
+                    "symbol": "BTCUSDT",
+                    "interval": interval,
+                    "limit": limit
+                }, timeout=10)
+                response.raise_for_status()
+                klines = response.json()
+                
+                return [{
+                    "open_time": datetime.fromtimestamp(k[0]/1000, tz=timezone.utc).isoformat(),
+                    "open": float(k[1]),
+                    "high": float(k[2]),
+                    "low": float(k[3]),
+                    "close": float(k[4]),
+                    "volume": float(k[5]),
+                    "change_pct": round((float(k[4]) - float(k[1])) / float(k[1]) * 100, 3)
+                } for k in klines]
+            except Exception as e:
+                print(f"⚠️ Binance klines failed ({e}), switching to CryptoCompare fallback")
+                self.use_fallback = True
+        
+        # Fallback to CryptoCompare - uses minute data
+        # Map interval to CryptoCompare format
+        if interval in ["1m", "5m", "15m"]:
+            endpoint = "histominute"
+            # CryptoCompare minute data, aggregate as needed
+            aggregate = int(interval.replace("m", ""))
+        elif interval in ["1h", "4h"]:
+            endpoint = "histohour"
+            aggregate = int(interval.replace("h", ""))
+        else:
+            endpoint = "histominute"
+            aggregate = 5
+        
+        response = requests.get(f"{self.CRYPTOCOMPARE_URL}/{endpoint}", params={
+            "fsym": "BTC",
+            "tsym": "USDT",
+            "limit": limit,
+            "aggregate": aggregate
+        }, timeout=10)
         response.raise_for_status()
-        klines = response.json()
+        data = response.json()["Data"]
         
         return [{
-            "open_time": datetime.fromtimestamp(k[0]/1000, tz=timezone.utc).isoformat(),
-            "open": float(k[1]),
-            "high": float(k[2]),
-            "low": float(k[3]),
-            "close": float(k[4]),
-            "volume": float(k[5]),
-            "change_pct": round((float(k[4]) - float(k[1])) / float(k[1]) * 100, 3)
-        } for k in klines]
+            "open_time": datetime.fromtimestamp(k["time"], tz=timezone.utc).isoformat(),
+            "open": float(k["open"]),
+            "high": float(k["high"]),
+            "low": float(k["low"]),
+            "close": float(k["close"]),
+            "volume": float(k.get("volumefrom", 0)),
+            "change_pct": round((float(k["close"]) - float(k["open"])) / float(k["open"]) * 100, 3) if k["open"] > 0 else 0
+        } for k in data]
     
     def get_24h_stats(self) -> dict:
-        response = requests.get(f"{self.BASE_URL}/ticker/24hr", params={"symbol": "BTCUSDT"})
+        if not self.use_fallback:
+            try:
+                response = requests.get(f"{self.BINANCE_URL}/ticker/24hr", params={"symbol": "BTCUSDT"}, timeout=10)
+                response.raise_for_status()
+                data = response.json()
+                return {
+                    "price_change_pct": float(data["priceChangePercent"]),
+                    "high_24h": float(data["highPrice"]),
+                    "low_24h": float(data["lowPrice"]),
+                    "volume_24h": float(data["volume"]),
+                    "quote_volume_24h": float(data["quoteVolume"]),
+                    "weighted_avg_price": float(data["weightedAvgPrice"])
+                }
+            except Exception as e:
+                print(f"⚠️ Binance 24h stats failed ({e}), switching to CryptoCompare fallback")
+                self.use_fallback = True
+        
+        # Fallback: Get 24h of hourly data and calculate stats
+        response = requests.get(f"{self.CRYPTOCOMPARE_URL}/histohour", params={
+            "fsym": "BTC",
+            "tsym": "USDT",
+            "limit": 24
+        }, timeout=10)
         response.raise_for_status()
-        data = response.json()
+        data = response.json()["Data"]
+        
+        if not data:
+            return {
+                "price_change_pct": 0,
+                "high_24h": 0,
+                "low_24h": 0,
+                "volume_24h": 0,
+                "quote_volume_24h": 0,
+                "weighted_avg_price": 0
+            }
+        
+        highs = [d["high"] for d in data]
+        lows = [d["low"] for d in data]
+        volumes = [d.get("volumefrom", 0) for d in data]
+        closes = [d["close"] for d in data]
+        
+        first_open = data[0]["open"]
+        last_close = data[-1]["close"]
+        price_change_pct = ((last_close - first_open) / first_open * 100) if first_open > 0 else 0
+        
+        # VWAP approximation
+        total_volume = sum(volumes)
+        vwap = sum(c * v for c, v in zip(closes, volumes)) / total_volume if total_volume > 0 else last_close
+        
         return {
-            "price_change_pct": float(data["priceChangePercent"]),
-            "high_24h": float(data["highPrice"]),
-            "low_24h": float(data["lowPrice"]),
-            "volume_24h": float(data["volume"]),
-            "quote_volume_24h": float(data["quoteVolume"]),
-            "weighted_avg_price": float(data["weightedAvgPrice"])
+            "price_change_pct": price_change_pct,
+            "high_24h": max(highs),
+            "low_24h": min(lows),
+            "volume_24h": total_volume,
+            "quote_volume_24h": total_volume * vwap,
+            "weighted_avg_price": vwap
         }
 
 
