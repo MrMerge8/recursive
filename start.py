@@ -47,9 +47,14 @@ def setup_database():
 
 def main():
     """Start dashboard and predictor services."""
-    print("=" * 50)
-    print("🐍 Recursive - Starting Services")
-    print("=" * 50)
+    print("=" * 50, flush=True)
+    print("🐍 Recursive - Starting Services", flush=True)
+    print("=" * 50, flush=True)
+    
+    # Check API keys
+    print(f"\n🔑 API Keys:", flush=True)
+    print(f"   ANTHROPIC_API_KEY: {'✅ Set' if os.environ.get('ANTHROPIC_API_KEY') else '❌ NOT SET'}", flush=True)
+    print(f"   OPENAI_API_KEY: {'✅ Set' if os.environ.get('OPENAI_API_KEY') else '❌ NOT SET'}", flush=True)
     
     setup_database()
     

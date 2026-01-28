@@ -1511,22 +1511,28 @@ def run_single_cycle(predictor: Predictor):
 
 
 def run_continuous(predictor: Predictor):
+    import sys
     print(f"🚀 Starting Recursive Learning BTC Predictor [{PREDICTION_TIMEFRAME}]")
     print(f"   Interval: {PREDICTION_INTERVAL_MINS} minutes")
     print(f"   Database: {DB_PATH}")
     print(f"   Batch Size: {BATCH_SIZE}")
     print(f"   Meta-Analysis: Every {META_LEARNING_INTERVAL * BATCH_SIZE} predictions")
-    print("   Press Ctrl+C to stop\n")
+    print("   Running continuous loop...\n")
+    sys.stdout.flush()
     
     while True:
         try:
             run_single_cycle(predictor)
+            sys.stdout.flush()
         except KeyboardInterrupt:
             print("\n\n👋 Stopping predictor...")
             break
         except Exception as e:
-            print(f"\n❌ Error: {e}")
+            import traceback
+            print(f"\n❌ Error in prediction cycle: {e}")
+            traceback.print_exc()
             print("   Waiting 60s before retry...")
+            sys.stdout.flush()
             time.sleep(60)
 
 
@@ -1594,8 +1600,30 @@ def force_meta_analysis(predictor: Predictor):
 
 if __name__ == "__main__":
     import sys
+    import traceback
     
-    predictor = Predictor()
+    print("=" * 50)
+    print(f"🚀 Predictor starting...")
+    print(f"   PREDICTION_TIMEFRAME: {PREDICTION_TIMEFRAME}")
+    print(f"   PREDICTION_INTERVAL_MINS: {PREDICTION_INTERVAL_MINS}")
+    print(f"   DB_PATH: {DB_PATH}")
+    print(f"   VERIFIER_ENABLED: {VERIFIER_ENABLED}")
+    print(f"   ANTHROPIC_API_KEY set: {bool(os.environ.get('ANTHROPIC_API_KEY'))}")
+    print(f"   OPENAI_API_KEY set: {bool(os.environ.get('OPENAI_API_KEY'))}")
+    print("=" * 50)
+    sys.stdout.flush()
+    
+    try:
+        print("Initializing Predictor...")
+        sys.stdout.flush()
+        predictor = Predictor()
+        print("✅ Predictor initialized successfully")
+        sys.stdout.flush()
+    except Exception as e:
+        print(f"❌ Failed to initialize Predictor: {e}")
+        traceback.print_exc()
+        sys.stdout.flush()
+        sys.exit(1)
     
     if len(sys.argv) > 1:
         cmd = sys.argv[1]
