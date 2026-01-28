@@ -21,6 +21,64 @@ TIMEFRAMES = {
 DEFAULT_TIMEFRAME = '5'
 PORT = 8080
 
+# API authentication for external predictions (local LLM)
+API_KEY = os.environ.get('RAILWAY_API_KEY', '')
+
+
+def save_external_prediction(db_path: str, prediction: dict) -> int:
+    """Save a prediction from external source (local LLM) to the database."""
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
+    # Ensure table exists
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS predictions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT NOT NULL,
+            current_price REAL NOT NULL,
+            predicted_direction TEXT NOT NULL,
+            predicted_target REAL NOT NULL,
+            confidence INTEGER NOT NULL,
+            reasoning TEXT,
+            resolved_at TEXT,
+            actual_price REAL,
+            actual_direction TEXT,
+            direction_correct BOOLEAN,
+            target_error_pct REAL,
+            calibration_score REAL,
+            is_extreme BOOLEAN,
+            extreme_reason TEXT,
+            learning_extracted TEXT,
+            source TEXT DEFAULT 'local_llm'
+        )
+    """)
+    
+    # Check if source column exists, add if not
+    cursor.execute("PRAGMA table_info(predictions)")
+    columns = [col[1] for col in cursor.fetchall()]
+    if 'source' not in columns:
+        cursor.execute("ALTER TABLE predictions ADD COLUMN source TEXT DEFAULT 'claude'")
+    
+    cursor.execute("""
+        INSERT INTO predictions (
+            timestamp, current_price, predicted_direction, predicted_target,
+            confidence, reasoning, source
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (
+        prediction.get('timestamp', datetime.now(timezone.utc).isoformat()),
+        prediction['current_price'],
+        prediction['direction'].upper(),
+        prediction['target'],
+        prediction['confidence'],
+        prediction.get('reasoning', ''),
+        prediction.get('source', 'local_llm')
+    ))
+    
+    pred_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return pred_id
+
 def get_db_path(timeframe='5'):
     """Get database path for a given timeframe."""
     config = TIMEFRAMES.get(timeframe, TIMEFRAMES[DEFAULT_TIMEFRAME])
@@ -2267,6 +2325,186 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         elif self.path == '/favicon.ico':
             self.send_response(204)
             self.end_headers()
+        else:
+            self.send_error(404)
+    
+    def do_POST(self):
+        """Handle POST requests - API endpoints for external predictions."""
+        parsed = urlparse(self.path)
+        path = parsed.path
+        
+        if path == '/api/prediction':
+            # Authenticate
+            auth_header = self.headers.get('Authorization', '')
+            if API_KEY and not auth_header.startswith('Bearer '):
+                self.send_response(401)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': 'Missing Authorization header'}).encode())
+                return
+            
+            provided_key = auth_header.replace('Bearer ', '') if auth_header else ''
+            if API_KEY and provided_key != API_KEY:
+                self.send_response(403)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': 'Invalid API key'}).encode())
+                return
+            
+            # Read request body
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(content_length).decode('utf-8')
+            
+            try:
+                data = json.loads(body)
+            except json.JSONDecodeError:
+                self.send_response(400)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': 'Invalid JSON'}).encode())
+                return
+            
+            # Validate required fields
+            required = ['current_price', 'direction', 'target', 'confidence']
+            missing = [f for f in required if f not in data]
+            if missing:
+                self.send_response(400)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': f'Missing fields: {missing}'}).encode())
+                return
+            
+            # Get timeframe from data or default to 5min
+            timeframe = data.get('timeframe', '5')
+            if timeframe not in TIMEFRAMES:
+                timeframe = DEFAULT_TIMEFRAME
+            
+            db_path = get_db_path(timeframe)
+            
+            try:
+                pred_id = save_external_prediction(db_path, data)
+                print(f"📥 Received prediction from local LLM: {data['direction']} ${data['target']:,.2f} ({data['confidence']}%)")
+                
+                self.send_response(201)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    'success': True,
+                    'prediction_id': pred_id,
+                    'timeframe': timeframe
+                }).encode())
+            except Exception as e:
+                print(f"❌ Error saving prediction: {e}")
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': str(e)}).encode())
+        
+        elif path == '/api/resolve':
+            # Endpoint to resolve a prediction with actual price
+            auth_header = self.headers.get('Authorization', '')
+            provided_key = auth_header.replace('Bearer ', '') if auth_header else ''
+            if API_KEY and provided_key != API_KEY:
+                self.send_response(403)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': 'Invalid API key'}).encode())
+                return
+            
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(content_length).decode('utf-8')
+            
+            try:
+                data = json.loads(body)
+            except json.JSONDecodeError:
+                self.send_response(400)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': 'Invalid JSON'}).encode())
+                return
+            
+            required = ['prediction_id', 'actual_price']
+            missing = [f for f in required if f not in data]
+            if missing:
+                self.send_response(400)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': f'Missing fields: {missing}'}).encode())
+                return
+            
+            timeframe = data.get('timeframe', '5')
+            db_path = get_db_path(timeframe)
+            
+            try:
+                conn = sqlite3.connect(db_path)
+                cursor = conn.cursor()
+                
+                # Get the prediction
+                cursor.execute("SELECT * FROM predictions WHERE id = ?", (data['prediction_id'],))
+                row = cursor.fetchone()
+                
+                if not row:
+                    conn.close()
+                    self.send_response(404)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({'error': 'Prediction not found'}).encode())
+                    return
+                
+                # Get column names
+                cursor.execute("PRAGMA table_info(predictions)")
+                columns = {col[1]: idx for idx, col in enumerate(cursor.fetchall())}
+                
+                current_price = row[columns['current_price']]
+                predicted_direction = row[columns['predicted_direction']]
+                predicted_target = row[columns['predicted_target']]
+                confidence = row[columns['confidence']]
+                actual_price = data['actual_price']
+                
+                actual_direction = 'UP' if actual_price > current_price else 'DOWN'
+                direction_correct = predicted_direction == actual_direction
+                target_error_pct = abs(actual_price - predicted_target) / current_price * 100
+                calibration_score = confidence / 100 if direction_correct else (100 - confidence) / 100
+                
+                cursor.execute("""
+                    UPDATE predictions SET
+                        resolved_at = ?,
+                        actual_price = ?,
+                        actual_direction = ?,
+                        direction_correct = ?,
+                        target_error_pct = ?,
+                        calibration_score = ?
+                    WHERE id = ?
+                """, (
+                    datetime.now(timezone.utc).isoformat(),
+                    actual_price,
+                    actual_direction,
+                    direction_correct,
+                    target_error_pct,
+                    calibration_score,
+                    data['prediction_id']
+                ))
+                conn.commit()
+                conn.close()
+                
+                result_str = '✓ Correct' if direction_correct else '✗ Wrong'
+                print(f"📊 Resolved prediction {data['prediction_id']}: {result_str} (error: {target_error_pct:.2f}%)")
+                
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    'success': True,
+                    'direction_correct': direction_correct,
+                    'target_error_pct': target_error_pct,
+                    'calibration_score': calibration_score
+                }).encode())
+            except Exception as e:
+                print(f"❌ Error resolving prediction: {e}")
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': str(e)}).encode())
         else:
             self.send_error(404)
 
