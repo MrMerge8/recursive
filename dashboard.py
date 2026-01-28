@@ -1664,7 +1664,7 @@ def get_html_template(timeframe='5'):
                     <div class="local-llm-subtitle">Fine-tuned model predictions</div>
                 </div>
                 <div class="local-llm-status %%LOCAL_LLM_STATUS_CLASS%%">
-                    <span style="width: 6px; height: 6px; border-radius: 50%%; background: currentColor;"></span>
+                    <span style="width: 6px; height: 6px; border-radius: 50%; background: currentColor;"></span>
                     %%LOCAL_LLM_STATUS%%
                 </div>
             </div>
