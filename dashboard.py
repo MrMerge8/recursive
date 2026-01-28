@@ -748,6 +748,205 @@ def get_html_template(timeframe='5'):
             background: rgba(230, 81, 0, 0.2);
         }
         
+        /* Local LLM Section */
+        .local-llm-section {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-left: 4px solid #E65100;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+        
+        .local-llm-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        
+        .local-llm-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #E65100, #FF9800);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+        
+        .local-llm-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text);
+        }
+        
+        .local-llm-subtitle {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+        
+        .local-llm-status {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .local-llm-status.connected {
+            background: var(--success-bg);
+            color: var(--success);
+        }
+        
+        .local-llm-status.waiting {
+            background: var(--warning-bg);
+            color: var(--warning);
+        }
+        
+        .local-llm-stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        
+        @media (max-width: 768px) {
+            .local-llm-stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        .local-llm-stat {
+            background: #FFF3E0;
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+        }
+        
+        body.dark .local-llm-stat {
+            background: rgba(230, 81, 0, 0.15);
+        }
+        
+        .local-llm-stat-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 20px;
+            font-weight: 600;
+            color: #E65100;
+        }
+        
+        .local-llm-stat-label {
+            font-size: 10px;
+            font-weight: 500;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        
+        .local-llm-prediction {
+            background: #FFF8E1;
+            border: 1px solid #FFE082;
+            border-radius: 10px;
+            padding: 16px;
+        }
+        
+        body.dark .local-llm-prediction {
+            background: rgba(255, 224, 130, 0.1);
+            border-color: rgba(255, 224, 130, 0.3);
+        }
+        
+        .local-llm-prediction-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+        
+        .local-llm-prediction-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: #E65100;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .local-llm-prediction-time {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+        
+        .local-llm-prediction-main {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        
+        .local-llm-direction {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+        }
+        
+        .local-llm-direction.up {
+            background: var(--success-bg);
+            color: var(--success);
+        }
+        
+        .local-llm-direction.down {
+            background: var(--error-bg);
+            color: var(--error);
+        }
+        
+        .local-llm-target {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 22px;
+            font-weight: 600;
+            color: var(--text);
+        }
+        
+        .local-llm-confidence {
+            margin-left: auto;
+            text-align: right;
+        }
+        
+        .local-llm-confidence-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 18px;
+            font-weight: 600;
+            color: #E65100;
+        }
+        
+        .local-llm-confidence-label {
+            font-size: 10px;
+            color: var(--text-muted);
+        }
+        
+        .local-llm-empty {
+            text-align: center;
+            padding: 24px;
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+        
+        .local-llm-reasoning {
+            margin-top: 12px;
+            padding: 12px;
+            background: var(--bg);
+            border-radius: 8px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+        
         .result-correct {
             color: var(--success);
             font-weight: 600;
@@ -1456,6 +1655,40 @@ def get_html_template(timeframe='5'):
             </div>
         </div>
         
+        <!-- Local LLM Section -->
+        <div class="local-llm-section">
+            <div class="local-llm-header">
+                <div class="local-llm-icon">🏠</div>
+                <div>
+                    <div class="local-llm-title">Local LLM</div>
+                    <div class="local-llm-subtitle">Fine-tuned model predictions</div>
+                </div>
+                <div class="local-llm-status %%LOCAL_LLM_STATUS_CLASS%%">
+                    <span style="width: 6px; height: 6px; border-radius: 50%%; background: currentColor;"></span>
+                    %%LOCAL_LLM_STATUS%%
+                </div>
+            </div>
+            <div class="local-llm-stats">
+                <div class="local-llm-stat">
+                    <div class="local-llm-stat-value">%%LOCAL_LLM_TOTAL%%</div>
+                    <div class="local-llm-stat-label">Predictions</div>
+                </div>
+                <div class="local-llm-stat">
+                    <div class="local-llm-stat-value">%%LOCAL_LLM_ACCURACY%%</div>
+                    <div class="local-llm-stat-label">Accuracy</div>
+                </div>
+                <div class="local-llm-stat">
+                    <div class="local-llm-stat-value">%%LOCAL_LLM_RESOLVED%%</div>
+                    <div class="local-llm-stat-label">Resolved</div>
+                </div>
+                <div class="local-llm-stat">
+                    <div class="local-llm-stat-value">%%LOCAL_LLM_AVG_ERROR%%</div>
+                    <div class="local-llm-stat-label">Avg Error</div>
+                </div>
+            </div>
+            %%LOCAL_LLM_CURRENT_HTML%%
+        </div>
+        
         <!-- Recent Streak -->
         <div class="section-card" style="margin-bottom: 24px;">
             <div class="section-header">
@@ -1651,6 +1884,108 @@ def get_current_prediction(db_path=None):
     row = cursor.fetchone()
     conn.close()
     return dict(row) if row else None
+
+
+def get_local_llm_stats(db_path):
+    """Get statistics for local LLM predictions only."""
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
+    stats = {'total': 0, 'resolved': 0, 'correct': 0, 'accuracy': 0, 'avg_error': 0}
+    
+    # Check if source column exists
+    cursor.execute("PRAGMA table_info(predictions)")
+    columns = [col[1] for col in cursor.fetchall()]
+    if 'source' not in columns:
+        conn.close()
+        return stats
+    
+    cursor.execute("SELECT COUNT(*) FROM predictions WHERE source = 'local_llm'")
+    stats['total'] = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM predictions WHERE source = 'local_llm' AND resolved_at IS NOT NULL")
+    stats['resolved'] = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM predictions WHERE source = 'local_llm' AND direction_correct = 1")
+    stats['correct'] = cursor.fetchone()[0]
+    
+    stats['accuracy'] = (stats['correct'] / stats['resolved'] * 100) if stats['resolved'] > 0 else 0
+    
+    cursor.execute("SELECT AVG(target_error_pct) FROM predictions WHERE source = 'local_llm' AND resolved_at IS NOT NULL")
+    avg_error = cursor.fetchone()[0]
+    stats['avg_error'] = avg_error if avg_error else 0
+    
+    conn.close()
+    return stats
+
+
+def get_local_llm_current(db_path):
+    """Get the most recent local LLM prediction."""
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    # Check if source column exists
+    cursor.execute("PRAGMA table_info(predictions)")
+    columns = [col[1] for col in cursor.fetchall()]
+    if 'source' not in columns:
+        conn.close()
+        return None
+    
+    cursor.execute("""
+        SELECT * FROM predictions 
+        WHERE source = 'local_llm'
+        ORDER BY timestamp DESC 
+        LIMIT 1
+    """)
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def render_local_llm_current(pred):
+    """Render the current local LLM prediction HTML."""
+    if not pred:
+        return '<div class="local-llm-empty">No predictions from local LLM yet. Push predictions using the API.</div>'
+    
+    direction = pred['predicted_direction']
+    dir_class = 'up' if direction == 'UP' else 'down'
+    arrow = '↑' if direction == 'UP' else '↓'
+    
+    is_resolved = pred['resolved_at'] is not None
+    time_short = pred['timestamp'][11:16] if pred['timestamp'] else '—'
+    
+    if is_resolved:
+        result = '✓ Correct' if pred['direction_correct'] else '✗ Wrong'
+        result_class = 'success' if pred['direction_correct'] else 'error'
+        status_html = f'<span style="color: var(--{result_class}); font-weight: 600;">{result}</span> • Error: {pred["target_error_pct"]:.2f}%'
+    else:
+        status_html = '<span style="color: var(--warning);">⏳ Waiting for resolution...</span>'
+    
+    reasoning = pred.get('reasoning', '')
+    reasoning_escaped = reasoning.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;') if reasoning else ''
+    reasoning_html = f'<div class="local-llm-reasoning">{reasoning_escaped}</div>' if reasoning_escaped else ''
+    
+    return f"""
+    <div class="local-llm-prediction">
+        <div class="local-llm-prediction-header">
+            <span class="local-llm-prediction-label">Latest Prediction</span>
+            <span class="local-llm-prediction-time">{time_short} • {status_html}</span>
+        </div>
+        <div class="local-llm-prediction-main">
+            <div class="local-llm-direction {dir_class}">
+                <span>{arrow}</span>
+                {direction}
+            </div>
+            <div class="local-llm-target">${pred['predicted_target']:,.2f}</div>
+            <div class="local-llm-confidence">
+                <div class="local-llm-confidence-value">{pred['confidence']}%</div>
+                <div class="local-llm-confidence-label">confidence</div>
+            </div>
+        </div>
+        {reasoning_html}
+    </div>
+    """
 
 def get_recent_predictions(db_path=None, limit=15):
     if db_path is None:
@@ -2348,6 +2683,26 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             html = html.replace('%%CONSENSUS_CATCHES%%', str(consensus_stats['catches']))
             html = html.replace('%%CONSENSUS_FALSE_ALARMS%%', str(consensus_stats['false_alarms']))
             html = html.replace('%%CONSENSUS_BLIND_SPOTS%%', str(consensus_stats['blind_spots']))
+            
+            # Local LLM replacements
+            local_llm_stats = get_local_llm_stats(db_path)
+            local_llm_current = get_local_llm_current(db_path)
+            
+            # Determine status based on recent activity
+            if local_llm_stats['total'] > 0:
+                local_llm_status = 'Connected'
+                local_llm_status_class = 'connected'
+            else:
+                local_llm_status = 'Waiting'
+                local_llm_status_class = 'waiting'
+            
+            html = html.replace('%%LOCAL_LLM_STATUS%%', local_llm_status)
+            html = html.replace('%%LOCAL_LLM_STATUS_CLASS%%', local_llm_status_class)
+            html = html.replace('%%LOCAL_LLM_TOTAL%%', str(local_llm_stats['total']))
+            html = html.replace('%%LOCAL_LLM_ACCURACY%%', f"{local_llm_stats['accuracy']:.1f}%")
+            html = html.replace('%%LOCAL_LLM_RESOLVED%%', str(local_llm_stats['resolved']))
+            html = html.replace('%%LOCAL_LLM_AVG_ERROR%%', f"{local_llm_stats['avg_error']:.2f}%")
+            html = html.replace('%%LOCAL_LLM_CURRENT_HTML%%', render_local_llm_current(local_llm_current))
             
             # Timeframe replacements
             html = html.replace('%%TIMEFRAME_LABEL%%', tf_config['label'])
