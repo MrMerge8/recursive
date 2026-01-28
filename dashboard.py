@@ -1886,6 +1886,97 @@ def get_current_prediction(db_path=None):
     return dict(row) if row else None
 
 
+def get_btc_price_for_resolution():
+    """Fetch current BTC price for resolving predictions."""
+    import requests
+    try:
+        # Try CryptoCompare first (global access)
+        response = requests.get(
+            "https://min-api.cryptocompare.com/data/price",
+            params={"fsym": "BTC", "tsyms": "USDT"},
+            timeout=10
+        )
+        response.raise_for_status()
+        return float(response.json()["USDT"])
+    except Exception as e:
+        print(f"Error fetching BTC price: {e}")
+        return None
+
+
+def auto_resolve_local_llm_predictions(db_path, timeframe_mins=5):
+    """Auto-resolve local LLM predictions that are past their resolution time."""
+    from datetime import datetime, timezone, timedelta
+    
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    # Check if source column exists
+    cursor.execute("PRAGMA table_info(predictions)")
+    columns = [col[1] for col in cursor.fetchall()]
+    if 'source' not in columns:
+        conn.close()
+        return 0
+    
+    # Find unresolved local LLM predictions older than timeframe
+    cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=timeframe_mins)
+    cutoff_str = cutoff_time.isoformat()
+    
+    cursor.execute("""
+        SELECT * FROM predictions 
+        WHERE source = 'local_llm' 
+        AND resolved_at IS NULL 
+        AND timestamp < ?
+    """, (cutoff_str,))
+    
+    pending = cursor.fetchall()
+    if not pending:
+        conn.close()
+        return 0
+    
+    # Get current price
+    actual_price = get_btc_price_for_resolution()
+    if actual_price is None:
+        conn.close()
+        return 0
+    
+    resolved_count = 0
+    now = datetime.now(timezone.utc).isoformat()
+    
+    for pred in pending:
+        pred = dict(pred)
+        
+        # Calculate results
+        actual_direction = "UP" if actual_price > pred['current_price'] else "DOWN"
+        direction_correct = 1 if actual_direction == pred['predicted_direction'] else 0
+        target_error_pct = abs(actual_price - pred['predicted_target']) / pred['predicted_target'] * 100
+        
+        # Calculate calibration
+        if direction_correct:
+            calibration = 100 - target_error_pct
+        else:
+            calibration = -target_error_pct
+        
+        # Update prediction
+        cursor.execute("""
+            UPDATE predictions SET
+                actual_price = ?,
+                actual_direction = ?,
+                direction_correct = ?,
+                target_error_pct = ?,
+                calibration_score = ?,
+                resolved_at = ?
+            WHERE id = ?
+        """, (actual_price, actual_direction, direction_correct, target_error_pct, calibration, now, pred['id']))
+        
+        resolved_count += 1
+        print(f"Auto-resolved Local LLM prediction #{pred['id']}: {pred['predicted_direction']} -> {actual_direction} ({'✓' if direction_correct else '✗'})")
+    
+    conn.commit()
+    conn.close()
+    return resolved_count
+
+
 def get_local_llm_stats(db_path):
     """Get statistics for local LLM predictions only."""
     conn = sqlite3.connect(db_path)
@@ -2620,6 +2711,11 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         db_path = get_db_path(timeframe)
         
         if path == '/' or path == '/index.html' or path.startswith('/?'):
+            # Auto-resolve any pending Local LLM predictions
+            resolved = auto_resolve_local_llm_predictions(db_path, tf_config['interval'])
+            if resolved > 0:
+                print(f"Auto-resolved {resolved} Local LLM prediction(s)")
+            
             self.send_response(200)
             self.send_header('Content-type', 'text/html; charset=utf-8')
             self.end_headers()
