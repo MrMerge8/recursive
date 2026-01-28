@@ -8,7 +8,7 @@ import os
 import json
 import sqlite3
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from dataclasses import dataclass
 from typing import Optional, List
 import requests
@@ -1514,6 +1514,46 @@ def classify_outcome(pred: Prediction, vpred: VerifierPrediction) -> str:
         return "gpt_false_alarm"
 
 
+def get_next_aligned_time(interval_mins: int) -> datetime:
+    """Calculate the next clock-aligned time for predictions.
+    
+    For 5-min:  :00, :05, :10, :15, :20, :25, :30, :35, :40, :45, :50, :55
+    For 15-min: :00, :15, :30, :45
+    For 60-min: :00
+    """
+    now = datetime.now(timezone.utc)
+    
+    # Find next aligned minute
+    current_minute = now.minute
+    next_aligned_minute = ((current_minute // interval_mins) + 1) * interval_mins
+    
+    if next_aligned_minute >= 60:
+        # Roll over to next hour
+        next_time = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+    else:
+        next_time = now.replace(minute=next_aligned_minute, second=0, microsecond=0)
+    
+    return next_time
+
+
+def wait_for_aligned_slot(interval_mins: int) -> datetime:
+    """Wait until the next clock-aligned time slot.
+    
+    Returns the target time we waited for.
+    """
+    import sys
+    next_time = get_next_aligned_time(interval_mins)
+    now = datetime.now(timezone.utc)
+    wait_seconds = (next_time - now).total_seconds()
+    
+    if wait_seconds > 0:
+        print(f"⏰ Clock-aligned: Next slot at {next_time.strftime('%H:%M:%S')} UTC (waiting {wait_seconds:.0f}s)")
+        sys.stdout.flush()
+        time.sleep(wait_seconds)
+    
+    return next_time
+
+
 def run_single_cycle(predictor: Predictor):
     print("\n" + "="*60)
     print(f"🔮 Making prediction at {datetime.now(timezone.utc).isoformat()}")
@@ -1620,11 +1660,17 @@ def run_continuous(predictor: Predictor):
     print(f"   Database: {DB_PATH}")
     print(f"   Batch Size: {BATCH_SIZE}")
     print(f"   Meta-Analysis: Every {META_LEARNING_INTERVAL * BATCH_SIZE} predictions")
+    print(f"   Clock-Aligned: YES (predictions at :{':'.join(str(i).zfill(2) for i in range(0, 60, PREDICTION_INTERVAL_MINS))})")
     print("   Running continuous loop...\n")
     sys.stdout.flush()
     
     while True:
         try:
+            # Wait for next clock-aligned slot before making prediction
+            slot_time = wait_for_aligned_slot(PREDICTION_INTERVAL_MINS)
+            print(f"🎯 Slot {slot_time.strftime('%H:%M')} UTC - Starting cycle")
+            sys.stdout.flush()
+            
             run_single_cycle(predictor)
             sys.stdout.flush()
         except KeyboardInterrupt:
