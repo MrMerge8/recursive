@@ -15,13 +15,14 @@ import requests
 from anthropic import Anthropic
 from openai import OpenAI
 
-# Configuration
-PREDICTION_INTERVAL_MINS = 5
+# Configuration (can be overridden by environment variables)
+PREDICTION_INTERVAL_MINS = int(os.environ.get("PREDICTION_INTERVAL", "5"))
 BATCH_SIZE = 20
 EXTREME_PERCENTILE = 10
 CONTEXT_EXAMPLES = 10
 META_LEARNING_INTERVAL = 5  # Analyze meta-patterns every N batches (100 predictions)
-DB_PATH = "predictions.db"
+DB_PATH = os.environ.get("DB_PATH", "predictions.db")
+PREDICTION_TIMEFRAME = os.environ.get("PREDICTION_TIMEFRAME", "5min")
 
 @dataclass
 class Prediction:
@@ -1510,11 +1511,11 @@ def run_single_cycle(predictor: Predictor):
 
 
 def run_continuous(predictor: Predictor):
-    print("🚀 Starting Recursive Learning BTC Predictor (with Meta-Learning)")
+    print(f"🚀 Starting Recursive Learning BTC Predictor [{PREDICTION_TIMEFRAME}]")
     print(f"   Interval: {PREDICTION_INTERVAL_MINS} minutes")
+    print(f"   Database: {DB_PATH}")
     print(f"   Batch Size: {BATCH_SIZE}")
     print(f"   Meta-Analysis: Every {META_LEARNING_INTERVAL * BATCH_SIZE} predictions")
-    print(f"   Data: 24 hours of 5-min candles")
     print("   Press Ctrl+C to stop\n")
     
     while True:

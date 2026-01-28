@@ -24,62 +24,26 @@ TIMEFRAMES = {
 }
 
 def setup_database():
-    """Setup database paths for Railway persistent volume."""
+    """Setup database paths for Railway or local deployment."""
+    # Determine the data directory
     if IS_RAILWAY and os.path.exists(DATA_DIR):
         print(f"🗄️  Railway detected, using persistent volume: {DATA_DIR}")
-        
-        for tf, config in TIMEFRAMES.items():
-            db_name = config['db']
-            source_db = db_name
-            target_db = os.path.join(DATA_DIR, db_name)
-            
-            # If target doesn't exist but source does, migrate it
-            if os.path.exists(source_db) and not os.path.exists(target_db):
-                print(f"   Migrating {source_db} to {target_db}")
-                shutil.copy2(source_db, target_db)
-            elif os.path.exists(source_db) and os.path.exists(target_db):
-                # Check if target is empty but source has data
-                try:
-                    conn = sqlite3.connect(target_db)
-                    cursor = conn.cursor()
-                    cursor.execute("SELECT COUNT(*) FROM predictions")
-                    target_count = cursor.fetchone()[0]
-                    conn.close()
-                    
-                    if target_count == 0:
-                        conn = sqlite3.connect(source_db)
-                        cursor = conn.cursor()
-                        cursor.execute("SELECT COUNT(*) FROM predictions")
-                        source_count = cursor.fetchone()[0]
-                        conn.close()
-                        
-                        if source_count > 0:
-                            print(f"   Target empty, migrating {source_count} predictions from {source_db}")
-                            shutil.copy2(source_db, target_db)
-                except Exception as e:
-                    print(f"   Migration check failed: {e}")
-            
-            # Set environment variable for this timeframe's DB path
-            env_var = f"DB_PATH_{tf.upper().replace('-', '_')}"
-            if os.path.exists(target_db):
-                os.environ[env_var] = target_db
-                print(f"   {tf}: {target_db}")
-            elif os.path.exists(source_db):
-                os.environ[env_var] = source_db
-                print(f"   {tf}: {source_db} (local)")
-        
-        # Also handle legacy single predictions.db
-        legacy_source = 'predictions.db'
-        legacy_target = os.path.join(DATA_DIR, 'predictions.db')
-        if os.path.exists(legacy_source) and not os.path.exists(legacy_target):
-            shutil.copy2(legacy_source, legacy_target)
-        os.environ['DB_PATH'] = legacy_target if os.path.exists(legacy_target) else legacy_source
+        db_dir = DATA_DIR
     else:
-        print("🗄️  Running locally, using local database files")
-        for tf, config in TIMEFRAMES.items():
-            env_var = f"DB_PATH_{tf.upper().replace('-', '_')}"
-            os.environ[env_var] = config['db']
-        os.environ['DB_PATH'] = 'predictions.db'
+        print("🗄️  Running locally, using current directory for databases")
+        db_dir = "."
+    
+    # Set up database paths for each timeframe
+    for tf, config in TIMEFRAMES.items():
+        db_name = config['db']
+        db_path = os.path.join(db_dir, db_name) if db_dir != "." else db_name
+        
+        env_var = f"DB_PATH_{tf.upper().replace('-', '_')}"
+        os.environ[env_var] = db_path
+        print(f"   {tf}: {db_path}")
+    
+    # Legacy DB path (not really used but kept for compatibility)
+    os.environ['DB_PATH'] = os.path.join(db_dir, 'predictions.db') if db_dir != "." else 'predictions.db'
 
 def main():
     """Start dashboard and predictor services."""
@@ -95,10 +59,8 @@ def main():
     print("\n🌐 Starting dashboard server...")
     dashboard_proc = subprocess.Popen(
         [sys.executable, 'dashboard.py'],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        bufsize=1,
-        universal_newlines=True
+        stdout=sys.stdout,
+        stderr=sys.stderr
     )
     processes['dashboard'] = dashboard_proc
     time.sleep(2)
@@ -111,13 +73,14 @@ def main():
         env['PREDICTION_INTERVAL'] = str(config['interval'])
         env['DB_PATH'] = os.environ.get(f"DB_PATH_{tf.upper().replace('-', '_')}", config['db'])
         
+        print(f"   DB_PATH={env['DB_PATH']}")
+        print(f"   PREDICTION_INTERVAL={env['PREDICTION_INTERVAL']}")
+        
         predictor_proc = subprocess.Popen(
             [sys.executable, 'predictor.py'],
             env=env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            bufsize=1,
-            universal_newlines=True
+            stdout=sys.stdout,
+            stderr=sys.stderr
         )
         processes[f'predictor_{tf}'] = predictor_proc
         time.sleep(1)
@@ -145,10 +108,8 @@ def main():
                 if name == 'dashboard':
                     new_proc = subprocess.Popen(
                         [sys.executable, 'dashboard.py'],
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.STDOUT,
-                        bufsize=1,
-                        universal_newlines=True
+                        stdout=sys.stdout,
+                        stderr=sys.stderr
                     )
                     processes['dashboard'] = new_proc
                 elif name.startswith('predictor_'):
@@ -162,10 +123,8 @@ def main():
                     new_proc = subprocess.Popen(
                         [sys.executable, 'predictor.py'],
                         env=env,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.STDOUT,
-                        bufsize=1,
-                        universal_newlines=True
+                        stdout=sys.stdout,
+                        stderr=sys.stderr
                     )
                     processes[name] = new_proc
                 
