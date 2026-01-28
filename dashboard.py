@@ -722,6 +722,32 @@ def get_html_template(timeframe='5'):
             color: var(--error);
         }
         
+        .source-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        
+        .source-badge.claude {
+            background: var(--purple-bg);
+            color: var(--purple);
+        }
+        
+        .source-badge.local-llm {
+            background: #FFF3E0;
+            color: #E65100;
+        }
+        
+        body.dark .source-badge.local-llm {
+            background: rgba(230, 81, 0, 0.2);
+        }
+        
         .result-correct {
             color: var(--success);
             font-weight: 600;
@@ -1897,6 +1923,13 @@ def render_current_prediction(pred, verifier_pred=None, interval_mins=5):
     reasoning_escaped = reasoning.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;') if reasoning else 'No reasoning recorded'
     reasoning_short = reasoning_escaped[:150] + '...' if len(reasoning_escaped) > 150 else reasoning_escaped
     
+    # Source badge
+    source = pred.get('source', 'claude')
+    if source == 'local_llm':
+        source_badge = '<span class="source-badge local-llm" style="margin-left: 12px;">🏠 Local LLM</span>'
+    else:
+        source_badge = '<span class="source-badge claude" style="margin-left: 12px;">🤖 Claude</span>'
+    
     # GPT-4 Verification HTML
     verification_html = ""
     consensus_html = ""
@@ -1964,7 +1997,7 @@ def render_current_prediction(pred, verifier_pred=None, interval_mins=5):
     html = f"""
     <div class="current-prediction">
         <div class="current-prediction-header">
-            <span class="current-prediction-label">🔮 CURRENT PREDICTION • {status}</span>
+            <span class="current-prediction-label">🔮 CURRENT PREDICTION • {status}</span>{source_badge}
             <span class="current-prediction-time" id="time-remaining">{time_str}</span>
         </div>
         <div class="current-prediction-main">
@@ -2031,12 +2064,21 @@ def render_predictions(predictions):
         is_extreme = p.get('is_extreme', False)
         extreme_badge = '<span class="mini-badge" style="background: var(--purple-bg); color: var(--purple); margin-left: 8px;">EXTREME</span>' if is_extreme else ''
         
+        # Source badge (local LLM vs Claude)
+        source = p.get('source', 'claude')
+        if source == 'local_llm':
+            source_badge = '<span class="source-badge local-llm">🏠 Local</span>'
+            source_label = 'Local LLM Analysis'
+        else:
+            source_badge = '<span class="source-badge claude">🤖 Claude</span>'
+            source_label = 'Claude Analysis'
+        
         # First 2 rows expanded by default
         expanded_class = ' visible' if idx < 2 else ''
         
         rows.append(f"""
             <tr class="prediction-row" onclick="toggleReasoning({pred_id})">
-                <td><span class="mono">{time_short}</span></td>
+                <td><span class="mono">{time_short}</span> {source_badge}</td>
                 <td><span class="mini-badge {dir_class}">{dir_arrow} {p['predicted_direction']}</span> <span class="mono">${p['predicted_target']:,.2f}</span></td>
                 <td><span class="mono">{p['confidence']}%</span></td>
                 <td><span class="mono">${p['actual_price']:,.2f}</span></td>
@@ -2053,7 +2095,7 @@ def render_predictions(predictions):
                             <div class="reasoning-box-stat"><span>Move:</span> <strong style="color: var(--{change_class})">{price_change_pct:+.3f}%</strong></div>
                             <div class="reasoning-box-stat"><span>Calibration:</span> <strong>{p.get('calibration_score', 0):.2f}</strong></div>
                         </div>
-                        <div class="reasoning-label">LLM Analysis</div>
+                        <div class="reasoning-label">{source_label}</div>
                         <div class="reasoning-text">{reasoning}</div>
                     </div>
                 </td>
